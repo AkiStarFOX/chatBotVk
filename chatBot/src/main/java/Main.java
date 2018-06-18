@@ -18,6 +18,7 @@ import com.vk.api.sdk.queries.upload.UploadPhotoMessageQuery;
 
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -75,15 +76,15 @@ public class Main {
                 for (String s : attachIdList) {
                     System.out.println("ListVK" + s);
                 }
-                if (hexValid(jsonObject.get("body").getAsString())){
-                    if(attachIdList.size()==0){
+                if (hexValid(jsonObject.get("body").getAsString())) {
+                    if (attachIdList.size() == 0) {
                         apiClient.messages()
                                 .send(actor)
                                 .message("Нет таких картинок=(")
                                 .userId(jsonObject.get("user_id").getAsInt())
                                 .randomId(random.nextInt())
                                 .execute();
-                    }else{
+                    } else {
                         apiClient.messages()
                                 .send(actor)
                                 .message("work")
@@ -92,7 +93,7 @@ public class Main {
                                 .attachment(attachIdList)
                                 .execute();
                     }
-                }else {
+                } else {
                     apiClient.messages()
                             .send(actor)
                             .message("Цвет введен неправильно, попробуйте еще раз")
@@ -100,7 +101,6 @@ public class Main {
                             .randomId(random.nextInt())
                             .execute();
                 }
-
 
 
             }
@@ -154,24 +154,59 @@ public class Main {
     private static ArrayList<String> getPhotoFromBD(String colorOfImg) {
         Connection connection = null;
         ArrayList<String> list = new ArrayList<>();
+        Color defaultColorRGB = Color.decode(colorOfImg);
+        HSV hsv = new HSV(defaultColorRGB.getRed(), defaultColorRGB.getGreen(), defaultColorRGB.getBlue());
+        float offset = 0.f;
+        float startH1;
+        float startS1;
+        float startV1;
+        float endH1;
+        float endS1;
+        float endV1;
+
         try {
             connection = DriverManager.getConnection(MYSQL_URL, MYSQL_LOGIN, MYSQL_PASSWORD);
             Statement statement = connection.createStatement();
-            ResultSet resultSet = statement.executeQuery("select * from images where color ='" + colorOfImg + "'");
+            while (list.size() < 10) {
+
+            startH1 = hsv.getH() - offset / 2;
+            if (startH1 < 0.00f) startH1 = 0.f;
+            endH1 = hsv.getH() + offset / 2;
+            if (endH1 > 1.0f) endH1 = 1.0f;
+
+            startS1 = hsv.getS() - offset / 2;
+            if (startS1 < 0.00f) startS1 = 0.f;
+            endS1 = hsv.getS() + offset / 2;
+            if (endS1 > 1.0f) endS1 = 1.0f;
+
+            startV1 = hsv.getV() - offset / 2;
+            if (startV1 < 0.00f) startV1 = 0.f;
+            endV1 = hsv.getV() + offset / 2;
+            if (endV1 > 1.0f) endV1 = 1.0f;
+
+
+            ResultSet resultSet = statement.executeQuery("select * from imagesHSV where " +
+                    "H1 >='" + startH1 + "'and H1<='" + endH1 + "'" +
+                    "and S1 >='" + startS1 + "'and S1<='" + endS1 + "'" +
+                    "and V1 >='" + startV1 + "'and V1<='" + endV1 + "'" );
             int count = 0;
             while (resultSet.next()) {
-                System.out.println("+1 picha");
-                if (count < 15) {
+
+                if (count < 10) {
                     list.add(resultSet.getString(2));
                     count++;
                 } else {
                     break;
                 }
             }
+                System.out.println(offset);
+            offset+=0.1;
+            }
 
         } catch (SQLException e) {
             e.printStackTrace();
         }
+
 
         return list;
     }
@@ -200,20 +235,19 @@ public class Main {
         }
     }
 
-    private static Boolean hexValid(String hex){
-         String HEX_PATTERN
+    private static Boolean hexValid(String hex) {
+        String HEX_PATTERN
                 = "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$";
 
-         Pattern pattern;
-         Matcher matcher;
+        Pattern pattern;
+        Matcher matcher;
 
 
-         pattern = Pattern.compile(HEX_PATTERN);
+        pattern = Pattern.compile(HEX_PATTERN);
 
 
-
-            matcher = pattern.matcher(hex);
-            return matcher.matches();
+        matcher = pattern.matcher(hex);
+        return matcher.matches();
 
     }
 }
