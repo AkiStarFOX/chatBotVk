@@ -24,65 +24,34 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Main {
 
     private final static String PROPERTIES_FILE = "config.properties";
     private final static Random random = new Random();
+    private static final String MYSQL_URL = "jdbc:mysql://localhost:3306/imgdb?useUnicode=true&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=UTC";
+    private static final String MYSQL_LOGIN = "root";
+    private static final String MYSQL_PASSWORD = "root";
 
 
     public static void main(String[] args) throws Exception {
         Properties properties = readProperties();
-
         HttpTransportClient client = new HttpTransportClient();
         VkApiClient apiClient = new VkApiClient(client);
-
         GroupActor actor = initVkApi(apiClient, readProperties());
 
-//
-//while (true) {
-//    Thread.sleep(1000);
-//    GetResponse getResponse=apiClient.messages().get(actor).count(10).execute();
-//    List<Message> messageArrayList = getResponse.getItems();
-//    for (Message m : messageArrayList) {
-//        if (!m.isReadState()) {
-//            apiClient.messages().send(actor).message("DONT SLEEP ON WORK!").userId(m.getUserId()).randomId(random.nextInt()).execute();
-//
-//        }
-//    }
-//}
-        File file = null;
-        try {
-            String fileName = "google.png";
-            BufferedImage img = ImageIO.read(new URL("http://webiconspng.com/wp-content/uploads/2017/09/Google-PNG-Image-21405.png"));
-            file = new File(fileName);
-            if (!file.exists()) {
-                file.createNewFile();
 
-            }
-            ImageIO.write(img, "png", file);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-//
-        PhotoUpload photoUpload = apiClient.photos().getMessagesUploadServer(actor).execute();
-        MessageUploadResponse messageUploadResponse = apiClient.upload().photoMessage(photoUpload.getUploadUrl(), file).execute();
-
-
-        List<Photo> photoList = apiClient.photos().saveMessagesPhoto(actor, messageUploadResponse.getPhoto())
-                .server(messageUploadResponse.getServer())
-                .hash(messageUploadResponse.getHash())
-                .execute();
-        Photo photo = photoList.get(0);
-        String attachId = "photo" + photo.getOwnerId() + "_" + photo.getId();
         com.vk.api.sdk.objects.groups.responses.GetLongPollServerResponse getResponse = apiClient.groups().getLongPollServer(actor).execute();
+
         int ts = getResponse.getTs();
+
         while (true) {
             GetLongPollEventsResponse getLongPollServerResponse;
             try {
@@ -98,18 +67,113 @@ public class Main {
             for (JsonObject js : list) {
                 JsonObject jsonObject = js.getAsJsonObject("object");
                 System.out.println(jsonObject.get("body"));
-                apiClient.messages()
-                        .send(actor)
-                        .message("work")
-                        .userId(jsonObject.get("user_id").getAsInt())
-                        .randomId(random.nextInt())
-                        .attachment(attachId)
-                        .execute();
+                ArrayList<String> listFromDB = getPhotoFromBD(jsonObject.get("body").getAsString().toLowerCase());
+                List<String> attachIdList = loadPhotoInListForSend(listFromDB, actor, apiClient);
+                for (String s : listFromDB) {
+                    System.out.println("ListFromDB" + s);
+                }
+                for (String s : attachIdList) {
+                    System.out.println("ListVK" + s);
+                }
+                if (hexValid(jsonObject.get("body").getAsString())){
+                    if(attachIdList.size()==0){
+                        apiClient.messages()
+                                .send(actor)
+                                .message("Нет таких картинок=(")
+                                .userId(jsonObject.get("user_id").getAsInt())
+                                .randomId(random.nextInt())
+                                .execute();
+                    }else{
+                        apiClient.messages()
+                                .send(actor)
+                                .message("work")
+                                .userId(jsonObject.get("user_id").getAsInt())
+                                .randomId(random.nextInt())
+                                .attachment(attachIdList)
+                                .execute();
+                    }
+                }else {
+                    apiClient.messages()
+                            .send(actor)
+                            .message("Цвет введен неправильно, попробуйте еще раз")
+                            .userId(jsonObject.get("user_id").getAsInt())
+                            .randomId(random.nextInt())
+                            .execute();
+                }
+
+
 
             }
 
             ts = getLongPollServerResponse.getTs();
         }
+    }
+
+    private static List<String> loadPhotoInListForSend(ArrayList<String> listFromDB, GroupActor actor, VkApiClient apiClient) {
+        List<String> list = new ArrayList<>();
+        for (int i = 0; i < listFromDB.size(); i++) {
+            File file = null;
+            try {
+                String fileName = "google" + i + ".png";
+                BufferedImage img = ImageIO.read(new URL(listFromDB.get(i)));
+                file = new File(fileName);
+                if (!file.exists()) {
+                    file.createNewFile();
+
+                }
+                ImageIO.write(img, "png", file);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+
+            List<Photo> photoList = null;
+            try {
+                PhotoUpload photoUpload = apiClient.photos().getMessagesUploadServer(actor).execute();
+                MessageUploadResponse messageUploadResponse = apiClient.upload().photoMessage(photoUpload.getUploadUrl(), file).execute();
+                photoList = apiClient.photos().saveMessagesPhoto(actor, messageUploadResponse.getPhoto())
+                        .server(messageUploadResponse.getServer())
+                        .hash(messageUploadResponse.getHash())
+                        .execute();
+            } catch (ApiException e) {
+                e.printStackTrace();
+            } catch (ClientException e) {
+                e.printStackTrace();
+            }
+
+
+            Photo photo = photoList.get(0);
+
+            list.add("photo" + photo.getOwnerId() + "_" + photo.getId());
+
+        }
+        return list;
+    }
+
+    private static ArrayList<String> getPhotoFromBD(String colorOfImg) {
+        Connection connection = null;
+        ArrayList<String> list = new ArrayList<>();
+        try {
+            connection = DriverManager.getConnection(MYSQL_URL, MYSQL_LOGIN, MYSQL_PASSWORD);
+            Statement statement = connection.createStatement();
+            ResultSet resultSet = statement.executeQuery("select * from images where color ='" + colorOfImg + "'");
+            int count = 0;
+            while (resultSet.next()) {
+                System.out.println("+1 picha");
+                if (count < 15) {
+                    list.add(resultSet.getString(2));
+                    count++;
+                } else {
+                    break;
+                }
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return list;
     }
 
     private static GroupActor initVkApi(VkApiClient apiClient, Properties properties) {
@@ -134,5 +198,22 @@ public class Main {
         } catch (IOException e) {
             throw new RuntimeException("Incorrect properties file");
         }
+    }
+
+    private static Boolean hexValid(String hex){
+         String HEX_PATTERN
+                = "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$";
+
+         Pattern pattern;
+         Matcher matcher;
+
+
+         pattern = Pattern.compile(HEX_PATTERN);
+
+
+
+            matcher = pattern.matcher(hex);
+            return matcher.matches();
+
     }
 }
