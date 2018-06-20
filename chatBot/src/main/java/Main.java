@@ -62,47 +62,43 @@ public class Main {
                 getLongPollServerResponse = apiClient.longPoll().getEvents(getResponse.getServer(), getResponse.getKey(), ts).waitTime(25).execute();
 
             }
+
             List<JsonObject> list = getLongPollServerResponse.getUpdates();
+            System.out.println(list.isEmpty());
+            if(!list.isEmpty()) {
+
+                for (JsonObject js : list) {
+                    JsonObject jsonObject = js.getAsJsonObject("object");
 
 
-            for (JsonObject js : list) {
-                JsonObject jsonObject = js.getAsJsonObject("object");
-                System.out.println(jsonObject.get("body"));
-                ArrayList<String> listFromDB = getPhotoFromBD(jsonObject.get("body").getAsString().toLowerCase());
-                List<String> attachIdList = loadPhotoInListForSend(listFromDB, actor, apiClient);
-                for (String s : listFromDB) {
-                    System.out.println("ListFromDB" + s);
-                }
-                for (String s : attachIdList) {
-                    System.out.println("ListVK" + s);
-                }
-                if (hexValid(jsonObject.get("body").getAsString())) {
-                    if (attachIdList.size() == 0) {
-                        apiClient.messages()
-                                .send(actor)
-                                .message("Нет таких картинок=(")
-                                .userId(jsonObject.get("user_id").getAsInt())
-                                .randomId(random.nextInt())
-                                .execute();
+                    if (hexValid(jsonObject.get("body").getAsString())) {
+                        ArrayList<String> listFromDB = getPhotoFromBD(jsonObject.get("body").getAsString().toLowerCase());
+                        List<String> attachIdList = loadPhotoInListForSend(listFromDB, actor, apiClient);
+                        if (attachIdList.size() == 0) {
+                            apiClient.messages()
+                                    .send(actor)
+                                    .message("Нет таких картинок=(")
+                                    .userId(jsonObject.get("user_id").getAsInt())
+                                    .randomId(random.nextInt())
+                                    .execute();
+                        } else {
+                            apiClient.messages()
+                                    .send(actor)
+                                    .message("work")
+                                    .userId(jsonObject.get("user_id").getAsInt())
+                                    .randomId(random.nextInt())
+                                    .attachment(attachIdList)
+                                    .execute();
+                        }
                     } else {
                         apiClient.messages()
                                 .send(actor)
-                                .message("work")
+                                .message("Цвет введен неправильно, попробуйте еще раз")
                                 .userId(jsonObject.get("user_id").getAsInt())
                                 .randomId(random.nextInt())
-                                .attachment(attachIdList)
                                 .execute();
                     }
-                } else {
-                    apiClient.messages()
-                            .send(actor)
-                            .message("Цвет введен неправильно, попробуйте еще раз")
-                            .userId(jsonObject.get("user_id").getAsInt())
-                            .randomId(random.nextInt())
-                            .execute();
                 }
-
-
             }
 
             ts = getLongPollServerResponse.getTs();
@@ -136,6 +132,7 @@ public class Main {
                         .server(messageUploadResponse.getServer())
                         .hash(messageUploadResponse.getHash())
                         .execute();
+                
             } catch (ApiException e) {
                 e.printStackTrace();
             } catch (ClientException e) {
@@ -169,38 +166,54 @@ public class Main {
             Statement statement = connection.createStatement();
             while (list.size() < 10) {
 
-            startH1 = hsv.getH() - offset / 2;
-            if (startH1 < 0.00f) startH1 = 0.f;
-            endH1 = hsv.getH() + offset / 2;
-            if (endH1 > 1.0f) endH1 = 1.0f;
+                startH1 = hsv.getH() - offset / 2;
+                if (startH1 < 0.00f) startH1 = 0.f;
+                endH1 = hsv.getH() + offset / 2;
+                if (endH1 > 1.0f) endH1 = 1.0f;
 
-            startS1 = hsv.getS() - offset / 2;
-            if (startS1 < 0.00f) startS1 = 0.f;
-            endS1 = hsv.getS() + offset / 2;
-            if (endS1 > 1.0f) endS1 = 1.0f;
+                startS1 = hsv.getS() - offset / 2;
+                if (startS1 < 0.00f) startS1 = 0.f;
+                endS1 = hsv.getS() + offset / 2;
+                if (endS1 > 1.0f) endS1 = 1.0f;
 
-            startV1 = hsv.getV() - offset / 2;
-            if (startV1 < 0.00f) startV1 = 0.f;
-            endV1 = hsv.getV() + offset / 2;
-            if (endV1 > 1.0f) endV1 = 1.0f;
+                startV1 = hsv.getV() - offset / 2;
+                if (startV1 < 0.00f) startV1 = 0.f;
+                endV1 = hsv.getV() + offset / 2;
+                if (endV1 > 1.0f) endV1 = 1.0f;
 
 
-            ResultSet resultSet = statement.executeQuery("select * from imagesHSV where " +
-                    "H1 >='" + startH1 + "'and H1<='" + endH1 + "'" +
-                    "and S1 >='" + startS1 + "'and S1<='" + endS1 + "'" +
-                    "and V1 >='" + startV1 + "'and V1<='" + endV1 + "'" );
-            int count = 0;
-            while (resultSet.next()) {
+                ResultSet resultSet = statement.executeQuery("select * from imagesHSV where " +
+                        "(H1 >='" + startH1 + "'and H1<='" + endH1 + "'" +
+                        "and S1 >='" + startS1 + "'and S1<='" + endS1 + "'" +
+                        "and V1 >='" + startV1 + "'and V1<='" + endV1 + "') " +
+                        "or" +
+                        "(H2 >='" + startH1 + "'and H2<='" + endH1 + "'" +
+                        "and S2 >='" + startS1 + "'and S2<='" + endS1 + "'" +
+                        "and V2 >='" + startV1 + "'and V2<='" + endV1 + "') " +
+                        "or" +
+                        "(H3 >='" + startH1 + "'and H3<='" + endH1 + "'" +
+                        "and S3 >='" + startS1 + "'and S3<='" + endS1 + "'" +
+                        "and V3 >='" + startV1 + "'and V3<='" + endV1 + "') " +
+                        "or" +
+                        "(H4 >='" + startH1 + "'and H4<='" + endH1 + "'" +
+                        "and S4 >='" + startS1 + "'and S4<='" + endS1 + "'" +
+                        "and V4 >='" + startV1 + "'and V4<='" + endV1 + "') " +
+                        "or" +
+                        "(H5 >='" + startH1 + "'and H5<='" + endH1 + "'" +
+                        "and S5 >='" + startS1 + "'and S5<='" + endS1 + "'" +
+                        "and V5 >='" + startV1 + "'and V5<='" + endV1 + "')");
+                int count = 0;
+                while (resultSet.next()) {
 
-                if (count < 10) {
-                    list.add(resultSet.getString(2));
-                    count++;
-                } else {
-                    break;
+                    if (count < 10) {
+                        list.add(resultSet.getString(2));
+                        count++;
+                    } else {
+                        break;
+                    }
                 }
-            }
                 System.out.println(offset);
-            offset+=0.1;
+                offset += 0.1;
             }
 
         } catch (SQLException e) {
