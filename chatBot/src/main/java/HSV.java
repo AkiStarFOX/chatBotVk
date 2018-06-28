@@ -48,4 +48,7 @@ public class HSV {
     public void setV(float v) {
         this.v = v;
     }
+    public static HSV getHSV(int red,int green,int blue){
+        return new HSV(red,green,blue);
+    }
 }

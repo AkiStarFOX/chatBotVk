@@ -1,20 +1,10 @@
-import com.google.gson.JsonElement;
+import ImgBot.ColorThief;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.vk.api.sdk.callback.longpoll.responses.GetLongPollEventsResponse;
 import com.vk.api.sdk.client.VkApiClient;
 import com.vk.api.sdk.client.actors.GroupActor;
-import com.vk.api.sdk.exceptions.ApiException;
-import com.vk.api.sdk.exceptions.ClientException;
 import com.vk.api.sdk.httpclient.HttpTransportClient;
-import com.vk.api.sdk.objects.base.Image;
-import com.vk.api.sdk.objects.groups.responses.GetLongPollServerResponse;
-import com.vk.api.sdk.objects.messages.Message;
-import com.vk.api.sdk.objects.messages.responses.GetResponse;
-import com.vk.api.sdk.objects.photos.Photo;
-import com.vk.api.sdk.objects.photos.PhotoUpload;
-import com.vk.api.sdk.objects.photos.responses.MessageUploadResponse;
-import com.vk.api.sdk.queries.messages.MessagesSendQuery;
-import com.vk.api.sdk.queries.upload.UploadPhotoMessageQuery;
 
 
 import javax.imageio.ImageIO;
@@ -26,10 +16,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.sql.*;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.List;
-import java.util.Properties;
-import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -65,14 +53,34 @@ public class Main {
 
             List<JsonObject> list = getLongPollServerResponse.getUpdates();
             System.out.println(list.isEmpty());
-            if(!list.isEmpty()) {
+            if (!list.isEmpty()) {
 
                 for (JsonObject js : list) {
                     JsonObject jsonObject = js.getAsJsonObject("object");
+                    if (jsonObject.get("attachments") != null) {
 
+                        JsonArray jsAttachment = jsonObject.getAsJsonArray("attachments");
+                        Iterator phonesItr = jsAttachment.iterator();
+                        JsonObject test = (JsonObject) phonesItr.next();
+                        JsonObject jsPhoto = test.getAsJsonObject("photo");
+
+
+
+                        ArrayList<Integer> listFromDB = getPhotoFromDBforImg(jsPhoto.get("photo_604").getAsString());
+                        List<String> attachIdList = loadPhotoInListForSend(listFromDB, actor, apiClient);
+                        apiClient.messages()
+                                .send(actor)
+                                .message("work")
+                                .userId(jsonObject.get("user_id").getAsInt())
+                                .randomId(random.nextInt())
+                                .attachment(attachIdList)
+                                .execute();
+                    } else {
+                        System.out.println("NOT HERE");
+                    }
 
                     if (hexValid(jsonObject.get("body").getAsString())) {
-                        ArrayList<String> listFromDB = getPhotoFromBD(jsonObject.get("body").getAsString().toLowerCase());
+                        ArrayList<Integer> listFromDB = getPhotoFromBD(jsonObject.get("body").getAsString().toLowerCase());
                         List<String> attachIdList = loadPhotoInListForSend(listFromDB, actor, apiClient);
                         if (attachIdList.size() == 0) {
                             apiClient.messages()
@@ -105,52 +113,19 @@ public class Main {
         }
     }
 
-    private static List<String> loadPhotoInListForSend(ArrayList<String> listFromDB, GroupActor actor, VkApiClient apiClient) {
+    private static List<String> loadPhotoInListForSend(ArrayList<Integer> listFromDB, GroupActor actor, VkApiClient apiClient) {
         List<String> list = new ArrayList<>();
         for (int i = 0; i < listFromDB.size(); i++) {
             File file = null;
-            try {
-                String fileName = "google" + i + ".png";
-                BufferedImage img = ImageIO.read(new URL(listFromDB.get(i)));
-                file = new File(fileName);
-                if (!file.exists()) {
-                    file.createNewFile();
-
-                }
-                ImageIO.write(img, "png", file);
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-
-
-            List<Photo> photoList = null;
-            try {
-                PhotoUpload photoUpload = apiClient.photos().getMessagesUploadServer(actor).execute();
-                MessageUploadResponse messageUploadResponse = apiClient.upload().photoMessage(photoUpload.getUploadUrl(), file).execute();
-                photoList = apiClient.photos().saveMessagesPhoto(actor, messageUploadResponse.getPhoto())
-                        .server(messageUploadResponse.getServer())
-                        .hash(messageUploadResponse.getHash())
-                        .execute();
-                
-            } catch (ApiException e) {
-                e.printStackTrace();
-            } catch (ClientException e) {
-                e.printStackTrace();
-            }
-
-
-            Photo photo = photoList.get(0);
-
-            list.add("photo" + photo.getOwnerId() + "_" + photo.getId());
+            list.add("photo" + -104375368 + "_" + listFromDB.get(i));
 
         }
         return list;
     }
 
-    private static ArrayList<String> getPhotoFromBD(String colorOfImg) {
+    private static ArrayList<Integer> getPhotoFromBD(String colorOfImg) {
         Connection connection = null;
-        ArrayList<String> list = new ArrayList<>();
+        Set<Integer> list = new HashSet<>();
         Color defaultColorRGB = Color.decode(colorOfImg);
         HSV hsv = new HSV(defaultColorRGB.getRed(), defaultColorRGB.getGreen(), defaultColorRGB.getBlue());
         float offset = 0.f;
@@ -206,13 +181,13 @@ public class Main {
                 while (resultSet.next()) {
 
                     if (count < 10) {
-                        list.add(resultSet.getString(2));
+                        list.add(resultSet.getInt(2));
                         count++;
+                        System.out.println(resultSet.getString(3));
                     } else {
                         break;
                     }
                 }
-                System.out.println(offset);
                 offset += 0.1;
             }
 
@@ -220,8 +195,9 @@ public class Main {
             e.printStackTrace();
         }
 
+        ArrayList<Integer> list1 = new ArrayList<>(list);
 
-        return list;
+        return list1;
     }
 
     private static GroupActor initVkApi(VkApiClient apiClient, Properties properties) {
@@ -262,5 +238,132 @@ public class Main {
         matcher = pattern.matcher(hex);
         return matcher.matches();
 
+    }
+
+//    private static float[][] getColorFromPhotoInAttachment(String URL) {
+//        File file = null;
+//        BufferedImage img = null;
+//        try {
+//            String fileName = "google.png";
+//            img = ImageIO.read(new URL(URL));
+//            file = new File(fileName);
+//            if (!file.exists()) {
+//                file.createNewFile();
+//
+//            }
+//            ImageIO.write(img, "png", file);
+//
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//        int[][] array = ColorThief.getPalette(img, 5, 1, false);
+//
+//        float[][] hsvArray;
+//        hsvArray = new float[array.length][3];
+//        for (int i = 0; i < array.length; i++) {
+//            float[] hsv1 = new float[3];
+//            Color.RGBtoHSB(array[i][0], array[i][1], array[i][2], hsv1);
+//            hsvArray[i][0] = hsv1[0];
+//            hsvArray[i][1] = hsv1[1];
+//            hsvArray[i][2] = hsv1[2];
+//        }
+//
+//        return hsvArray;
+//    }
+    private static ArrayList<Integer> getPhotoFromDBforImg(String URL){
+
+        Connection connection = null;
+        Set<Integer> list = new LinkedHashSet();
+        float limit = 0.001f;
+
+        File file = null;
+        BufferedImage img = null;
+        try {
+            String fileName = "google.png";
+            img = ImageIO.read(new URL(URL));
+            file = new File(fileName);
+            if (!file.exists()) {
+                file.createNewFile();
+
+            }
+            ImageIO.write(img, "png", file);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        Histo histo = new Histo(img);
+        System.out.println("-------H--------");
+        for (Map.Entry h:histo.getH().entrySet()){
+            System.out.println("ключH = "+h.getKey() + " значениеH = " + h.getValue());
+        }
+        System.out.println("-------S--------");
+        for (Map.Entry h:histo.getS().entrySet()){
+            System.out.println("ключS = "+h.getKey() + " значениеS = "+ h.getValue());
+        }
+        System.out.println("-------V--------");
+        for (Map.Entry h:histo.getV().entrySet()){
+            System.out.println("ключV = "+h.getKey() + " значениеV = "+ h.getValue());
+        }
+
+
+        try {
+            connection = DriverManager.getConnection(MYSQL_URL, MYSQL_LOGIN, MYSQL_PASSWORD);
+            Statement statement = connection.createStatement();
+            while (list.size() < 5) {
+                System.out.println(sqlRequest(histo,limit));
+                ResultSet resultSet = statement.executeQuery(sqlRequest(histo,limit)) ;
+
+//                int count = 0;
+                while (resultSet.next()) {
+//                    if (count < 10) {
+                        list.add(resultSet.getInt(2));
+                    System.out.println(resultSet.getString(3));
+//                        count++;
+//                    } else {
+//                        break;
+//                    }
+                }
+                limit+=0.001;
+                System.out.println(limit);
+
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        System.out.println(list.size());
+        ArrayList<Integer> list1 = new ArrayList<>(list);
+
+        return list1;
+    }
+    public static String sqlRequest(Histo histoOfImg,float limit){
+        StringBuilder s = new StringBuilder("select * from imageshsv where (");
+        for (Map.Entry e:histoOfImg.getH().entrySet()){
+            s.append("pow((")
+                    .append((float)e.getValue())
+                    .append("-H")
+                    .append(e.getKey())
+                    .append("),2)+");
+        }
+        s.append("0)<"+limit+" and (");
+        for (Map.Entry e:histoOfImg.getS().entrySet()){
+            s.append("pow((")
+                    .append((float)e.getValue())
+                    .append("-S")
+                    .append(e.getKey())
+                    .append("),2)+");
+        }
+        s.append("0)<"+limit+" and (");
+        for (Map.Entry e:histoOfImg.getV().entrySet()){
+            s.append("pow((")
+                    .append((float)e.getValue())
+                    .append("-V")
+                    .append(e.getKey())
+                    .append("),2)+");
+        }
+        s.append("0)<" + limit);
+
+        return s.toString();
     }
 }
