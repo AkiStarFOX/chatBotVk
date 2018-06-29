@@ -292,27 +292,31 @@ public class Main {
             e.printStackTrace();
         }
 
-        Histo histo = new Histo(img);
-        System.out.println("-------H--------");
-        for (Map.Entry h:histo.getH().entrySet()){
-            System.out.println("ключH = "+h.getKey() + " значениеH = " + h.getValue());
-        }
-        System.out.println("-------S--------");
-        for (Map.Entry h:histo.getS().entrySet()){
-            System.out.println("ключS = "+h.getKey() + " значениеS = "+ h.getValue());
-        }
-        System.out.println("-------V--------");
-        for (Map.Entry h:histo.getV().entrySet()){
-            System.out.println("ключV = "+h.getKey() + " значениеV = "+ h.getValue());
-        }
+//        Histo histo = new Histo(img);
+//        System.out.println("-------H--------");
+//        for (Map.Entry h:histo.getH().entrySet()){
+//            System.out.println("ключH = "+h.getKey() + " значениеH = " + h.getValue());
+//        }
+//        System.out.println("-------S--------");
+//        for (Map.Entry h:histo.getS().entrySet()){
+//            System.out.println("ключS = "+h.getKey() + " значениеS = "+ h.getValue());
+//        }
+//        System.out.println("-------V--------");
+//        for (Map.Entry h:histo.getV().entrySet()){
+//            System.out.println("ключV = "+h.getKey() + " значениеV = "+ h.getValue());
+//        }
+        PixelReader pixelReader = new PixelReader(img);
 
 
         try {
             connection = DriverManager.getConnection(MYSQL_URL, MYSQL_LOGIN, MYSQL_PASSWORD);
             Statement statement = connection.createStatement();
             while (list.size() < 5) {
-                System.out.println(sqlRequest(histo,limit));
-                ResultSet resultSet = statement.executeQuery(sqlRequest(histo,limit)) ;
+//                System.out.println(sqlRequest(histo,limit));
+//                ResultSet resultSet = statement.executeQuery(sqlRequest(histo,limit)) ;
+
+                ResultSet resultSet = statement.executeQuery(sqlPixelRequest(pixelReader,limit));
+                System.out.println(sqlPixelRequest(pixelReader,limit));
 
 //                int count = 0;
                 while (resultSet.next()) {
@@ -364,6 +368,47 @@ public class Main {
         }
         s.append("0)<" + limit);
 
+
+
+        return s.toString();
+    }
+
+    public static String sqlPixelRequest(PixelReader pixelReader,float limit){
+        Map<Integer, Map<Integer, Float>> resultMap = pixelReader.getResultMap();
+
+
+        StringBuilder s = new StringBuilder("select * from imageshsv where (");
+        s.append(mapStringRequest("R",resultMap.get(0)));
+        s.append(mapStringRequest("O",resultMap.get(1)));
+        s.append(mapStringRequest("Y",resultMap.get(2)));
+        s.append(mapStringRequest("LY",resultMap.get(3)));
+        s.append(mapStringRequest("LG",resultMap.get(4)));
+        s.append(mapStringRequest("G",resultMap.get(5)));
+        s.append(mapStringRequest("LB",resultMap.get(6)));
+        s.append(mapStringRequest("B",resultMap.get(7)));
+        s.append(mapStringRequest("DB",resultMap.get(8)));
+        s.append(mapStringRequest("P",resultMap.get(9)));
+        s.append(mapStringRequest("DP",resultMap.get(10)));
+        s.append(mapStringRequest("Pink",resultMap.get(11)));
+
+        s.append("sqrt(abs(").append(pixelReader.getBlack()).append("-Black))+");
+        s.append("sqrt(abs(").append(pixelReader.getGrey()).append("-Grey))+");
+        s.append("sqrt(abs(").append(pixelReader.getWhite()).append("-White))+");
+        s.append("sqrt(abs(").append(pixelReader.getLigth_grey()).append("-LG))");
+
+        s.append(")<"+5.0);
+        return s.toString();
+    }
+
+    public static String mapStringRequest(String name,Map<Integer,Float> map){
+        StringBuilder s= new StringBuilder();
+        for (Map.Entry m:map.entrySet()){
+            s.append("sqrt(abs(")
+                    .append(m.getValue())
+                    .append("-"+name)
+                    .append(m.getKey())
+            .append("))+");
+        }
         return s.toString();
     }
 }
