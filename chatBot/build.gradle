@@ -21,6 +21,8 @@ dependencies {
 //Log4j API and Core implementation required for binding
     compile group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.7'
     compile group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.7'
+    compile group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
+
 
     compile group: 'mysql', name: 'mysql-connector-java', version: '8.0.11'
 }

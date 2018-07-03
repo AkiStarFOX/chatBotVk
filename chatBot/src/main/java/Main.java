@@ -1,10 +1,13 @@
 import ImgBot.ColorThief;
+import Kmeans.Cluster;
+import Kmeans.KMeans;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.vk.api.sdk.callback.longpoll.responses.GetLongPollEventsResponse;
 import com.vk.api.sdk.client.VkApiClient;
 import com.vk.api.sdk.client.actors.GroupActor;
 import com.vk.api.sdk.httpclient.HttpTransportClient;
+import org.apache.commons.math3.ml.clustering.KMeansPlusPlusClusterer;
 
 
 import javax.imageio.ImageIO;
@@ -39,6 +42,11 @@ public class Main {
 
         com.vk.api.sdk.objects.groups.responses.GetLongPollServerResponse getResponse = apiClient.groups().getLongPollServer(actor).execute();
 
+
+        KMeans kMeans = new KMeans("C:\\Users\\WoW-a\\IdeaProjects\\chatBotVk\\chatBot\\src\\main\\java\\Kmeans\\test.csv",3);
+        for (Cluster c:kMeans.getPointsClusters()){
+            System.out.println("TEST"+c);
+        }
         int ts = getResponse.getTs();
 
         while (true) {
@@ -54,7 +62,7 @@ public class Main {
             List<JsonObject> list = getLongPollServerResponse.getUpdates();
             System.out.println(list.isEmpty());
             if (!list.isEmpty()) {
-
+                long time = System.currentTimeMillis();
                 for (JsonObject js : list) {
                     JsonObject jsonObject = js.getAsJsonObject("object");
                     if (jsonObject.get("attachments") != null) {
@@ -64,17 +72,18 @@ public class Main {
                         JsonObject test = (JsonObject) phonesItr.next();
                         JsonObject jsPhoto = test.getAsJsonObject("photo");
 
+                        for (int i = 1; i < 6; i++) {
+                            ArrayList<Integer> listFromDB = getPhotoFromDBforImg(jsPhoto.get("photo_604").getAsString(), i);
+                            List<String> attachIdList = loadPhotoInListForSend(listFromDB, actor, apiClient);
 
-
-                        ArrayList<Integer> listFromDB = getPhotoFromDBforImg(jsPhoto.get("photo_604").getAsString());
-                        List<String> attachIdList = loadPhotoInListForSend(listFromDB, actor, apiClient);
-                        apiClient.messages()
-                                .send(actor)
-                                .message("work")
-                                .userId(jsonObject.get("user_id").getAsInt())
-                                .randomId(random.nextInt())
-                                .attachment(attachIdList)
-                                .execute();
+                            apiClient.messages()
+                                    .send(actor)
+                                    .message("Формула - " + i + "; Время запроса - " + ((float) (System.currentTimeMillis() - time) / 1000.f) + " sec")
+                                    .userId(jsonObject.get("user_id").getAsInt())
+                                    .randomId(random.nextInt())
+                                    .attachment(attachIdList)
+                                    .execute();
+                        }
                     } else {
                         System.out.println("NOT HERE");
                     }
@@ -240,41 +249,11 @@ public class Main {
 
     }
 
-//    private static float[][] getColorFromPhotoInAttachment(String URL) {
-//        File file = null;
-//        BufferedImage img = null;
-//        try {
-//            String fileName = "google.png";
-//            img = ImageIO.read(new URL(URL));
-//            file = new File(fileName);
-//            if (!file.exists()) {
-//                file.createNewFile();
-//
-//            }
-//            ImageIO.write(img, "png", file);
-//
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
-//        int[][] array = ColorThief.getPalette(img, 5, 1, false);
-//
-//        float[][] hsvArray;
-//        hsvArray = new float[array.length][3];
-//        for (int i = 0; i < array.length; i++) {
-//            float[] hsv1 = new float[3];
-//            Color.RGBtoHSB(array[i][0], array[i][1], array[i][2], hsv1);
-//            hsvArray[i][0] = hsv1[0];
-//            hsvArray[i][1] = hsv1[1];
-//            hsvArray[i][2] = hsv1[2];
-//        }
-//
-//        return hsvArray;
-//    }
-    private static ArrayList<Integer> getPhotoFromDBforImg(String URL){
+    private static ArrayList<Integer> getPhotoFromDBforImg(String URL, int type) {
 
         Connection connection = null;
         Set<Integer> list = new LinkedHashSet();
-        float limit = 0.001f;
+        float limit = 1.6f;
 
         File file = null;
         BufferedImage img = null;
@@ -292,76 +271,63 @@ public class Main {
             e.printStackTrace();
         }
 
-//        Histo histo = new Histo(img);
-//        System.out.println("-------H--------");
-//        for (Map.Entry h:histo.getH().entrySet()){
-//            System.out.println("ключH = "+h.getKey() + " значениеH = " + h.getValue());
-//        }
-//        System.out.println("-------S--------");
-//        for (Map.Entry h:histo.getS().entrySet()){
-//            System.out.println("ключS = "+h.getKey() + " значениеS = "+ h.getValue());
-//        }
-//        System.out.println("-------V--------");
-//        for (Map.Entry h:histo.getV().entrySet()){
-//            System.out.println("ключV = "+h.getKey() + " значениеV = "+ h.getValue());
-//        }
+
         PixelReader pixelReader = new PixelReader(img);
 
 
         try {
             connection = DriverManager.getConnection(MYSQL_URL, MYSQL_LOGIN, MYSQL_PASSWORD);
             Statement statement = connection.createStatement();
-            while (list.size() < 5) {
+            while (list.size() < 10) {
 //                System.out.println(sqlRequest(histo,limit));
 //                ResultSet resultSet = statement.executeQuery(sqlRequest(histo,limit)) ;
+                long time = System.currentTimeMillis();
+                System.out.println(sqlPixelRequest(pixelReader, limit, type));
+                ResultSet resultSet = statement.executeQuery(sqlPixelRequest(pixelReader, limit, type));
+                System.out.println("time zaporsa = " + (float) (System.currentTimeMillis() - time) / 1000);
+//
 
-                ResultSet resultSet = statement.executeQuery(sqlPixelRequest(pixelReader,limit));
-                System.out.println(sqlPixelRequest(pixelReader,limit));
 
-//                int count = 0;
                 while (resultSet.next()) {
-//                    if (count < 10) {
-                        list.add(resultSet.getInt(2));
+
+                    list.add(resultSet.getInt(2));
                     System.out.println(resultSet.getString(3));
-//                        count++;
-//                    } else {
-//                        break;
-//                    }
+
                 }
-                limit+=0.001;
-                System.out.println(limit);
+                limit += 0.5;
+
 
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        System.out.println(list.size());
         ArrayList<Integer> list1 = new ArrayList<>(list);
 
         return list1;
     }
-    public static String sqlRequest(Histo histoOfImg,float limit){
+
+    public static String sqlRequest(Histo histoOfImg, float limit) {
         StringBuilder s = new StringBuilder("select * from imageshsv where (");
-        for (Map.Entry e:histoOfImg.getH().entrySet()){
+        for (Map.Entry e : histoOfImg.getH().entrySet()) {
             s.append("pow((")
-                    .append((float)e.getValue())
+                    .append((float) e.getValue())
                     .append("-H")
                     .append(e.getKey())
                     .append("),2)+");
         }
-        s.append("0)<"+limit+" and (");
-        for (Map.Entry e:histoOfImg.getS().entrySet()){
+        s.append("0)<" + limit + " and (");
+        for (Map.Entry e : histoOfImg.getS().entrySet()) {
             s.append("pow((")
-                    .append((float)e.getValue())
+                    .append((float) e.getValue())
                     .append("-S")
                     .append(e.getKey())
                     .append("),2)+");
         }
-        s.append("0)<"+limit+" and (");
-        for (Map.Entry e:histoOfImg.getV().entrySet()){
+        s.append("0)<" + limit + " and (");
+        for (Map.Entry e : histoOfImg.getV().entrySet()) {
             s.append("pow((")
-                    .append((float)e.getValue())
+                    .append((float) e.getValue())
                     .append("-V")
                     .append(e.getKey())
                     .append("),2)+");
@@ -369,45 +335,126 @@ public class Main {
         s.append("0)<" + limit);
 
 
-
         return s.toString();
     }
 
-    public static String sqlPixelRequest(PixelReader pixelReader,float limit){
+    public static String sqlPixelRequest(PixelReader pixelReader, float limit, int type) {
         Map<Integer, Map<Integer, Float>> resultMap = pixelReader.getResultMap();
 
 
         StringBuilder s = new StringBuilder("select * from imageshsv where (");
-        s.append(mapStringRequest("R",resultMap.get(0)));
-        s.append(mapStringRequest("O",resultMap.get(1)));
-        s.append(mapStringRequest("Y",resultMap.get(2)));
-        s.append(mapStringRequest("LY",resultMap.get(3)));
-        s.append(mapStringRequest("LG",resultMap.get(4)));
-        s.append(mapStringRequest("G",resultMap.get(5)));
-        s.append(mapStringRequest("LB",resultMap.get(6)));
-        s.append(mapStringRequest("B",resultMap.get(7)));
-        s.append(mapStringRequest("DB",resultMap.get(8)));
-        s.append(mapStringRequest("P",resultMap.get(9)));
-        s.append(mapStringRequest("DP",resultMap.get(10)));
-        s.append(mapStringRequest("Pink",resultMap.get(11)));
 
-        s.append("sqrt(abs(").append(pixelReader.getBlack()).append("-Black))+");
-        s.append("sqrt(abs(").append(pixelReader.getGrey()).append("-Grey))+");
-        s.append("sqrt(abs(").append(pixelReader.getWhite()).append("-White))+");
-        s.append("sqrt(abs(").append(pixelReader.getLigth_grey()).append("-LG))");
+        s.append(mapStringRequest("R", resultMap.get(0), type));
+        s.append(mapStringRequest("O", resultMap.get(1), type));
+        s.append(mapStringRequest("Y", resultMap.get(2), type));
+        s.append(mapStringRequest("LY", resultMap.get(3), type));
+        s.append(mapStringRequest("LG", resultMap.get(4), type));
+        s.append(mapStringRequest("G", resultMap.get(5), type));
+        s.append(mapStringRequest("LB", resultMap.get(6), type));
+        s.append(mapStringRequest("B", resultMap.get(7), type));
+        s.append(mapStringRequest("DB", resultMap.get(8), type));
+        s.append(mapStringRequest("P", resultMap.get(9), type));
+        s.append(mapStringRequest("DP", resultMap.get(10), type));
+        s.append(mapStringRequest("Pink", resultMap.get(11), type));
+        s.append(0 + ")<" + limit + " and ");
+        s.append("(Black >").append(pixelReader.getBlack()-0.1).append(" and Black < ").append(pixelReader.getBlack()+0.1).append(") and");
+        s.append("(White >").append(pixelReader.getWhite()-0.1).append(" and White < ").append(pixelReader.getWhite()+0.1).append(") and");
+        s.append("(Grey >").append(pixelReader.getGrey()-0.1).append(" and Grey < ").append(pixelReader.getGrey()+0.1).append(") and");
+        s.append("(LG >").append(pixelReader.getLigth_grey()-0.1).append(" and LG < ").append(pixelReader.getLigth_grey()+0.1).append(")");
 
-        s.append(")<"+5.0);
+
+//        switch (type){
+//            case 1:
+//                s.append("sqrt(abs(").append(pixelReader.getBlack()).append("-Black))+");
+//                s.append("sqrt(abs(").append(pixelReader.getGrey()).append("-Grey))+");
+//                s.append("sqrt(abs(").append(pixelReader.getWhite()).append("-White))+");
+//                s.append("sqrt(abs(").append(pixelReader.getLigth_grey()).append("-LG))");
+//                break;
+//            case 2:
+//                s.append("sqrt(abs(sqrt(").append(pixelReader.getBlack()).append(")- sqrt(Black)))+");
+//                s.append("sqrt(abs(sqrt(").append(pixelReader.getGrey()).append(") - sqrt(Grey)))+");
+//                s.append("sqrt(abs(sqrt(").append(pixelReader.getWhite()).append(") - sqrt(White)))+");
+//                s.append("sqrt(abs(sqrt(").append(pixelReader.getLigth_grey()).append(") - sqrt(LG)))");
+//                break;
+//            case 3:
+//                s.append("sqrt(abs(pow(").append(pixelReader.getBlack()).append(","+1.f/4.f+")- pow(Black,"+1.f/4.f+")))+");
+//                s.append("sqrt(abs(pow(").append(pixelReader.getGrey()).append(","+1.f/4.f+")- pow(Grey,"+1.f/4.f+")))+");
+//                s.append("sqrt(abs(pow(").append(pixelReader.getWhite()).append(","+1.f/4.f+")- pow(White,"+1.f/4.f+")))+");
+//                s.append("sqrt(abs(pow(").append(pixelReader.getLigth_grey()).append(","+1.f/4.f+")- pow(LG,"+1.f/4.f+")))");
+//                break;
+//            case 4:
+//                s.append("sqrt(abs(pow(").append(pixelReader.getBlack()).append(","+1.f/8.f+")- pow(Black,"+1.f/4.f+")))+");
+//                s.append("sqrt(abs(pow(").append(pixelReader.getGrey()).append(","+1.f/8.f+")- pow(Grey,"+1.f/8.f+")))+");
+//                s.append("sqrt(abs(pow(").append(pixelReader.getWhite()).append(","+1.f/8.f+")- pow(White,"+1.f/8.f+")))+");
+//                s.append("sqrt(abs(pow(").append(pixelReader.getLigth_grey()).append(","+1.f/8.f+")- pow(LG,"+1.f/8.f+")))");
+//                break;
+//            case 5:
+//                s.append("sqrt(abs(pow(").append(pixelReader.getBlack()).append(","+1.f/16.f+")- pow(Black,"+1.f/16.f+")))+");
+//                s.append("sqrt(abs(pow(").append(pixelReader.getGrey()).append(","+1.f/16.f+")- pow(Grey,"+1.f/16.f+")))+");
+//                s.append("sqrt(abs(pow(").append(pixelReader.getWhite()).append(","+1.f/16.f+")- pow(White,"+1.f/16.f+")))+");
+//                s.append("sqrt(abs(pow(").append(pixelReader.getLigth_grey()).append(","+1.f/16.f+")- pow(LG,"+1.f/16.f+")))");
+//                break;
+//
+//        }
+//        s.append("sqrt(abs(").append(pixelReader.getBlack()).append("-Black))+");
+//        s.append("sqrt(abs(").append(pixelReader.getGrey()).append("-Grey))+");
+//        s.append("sqrt(abs(").append(pixelReader.getWhite()).append("-White))+");
+//        s.append("sqrt(abs(").append(pixelReader.getLigth_grey()).append("-LG))");
+
+//        s.append(")<" + limit);
+        System.out.println(limit);
         return s.toString();
     }
 
-    public static String mapStringRequest(String name,Map<Integer,Float> map){
-        StringBuilder s= new StringBuilder();
-        for (Map.Entry m:map.entrySet()){
-            s.append("sqrt(abs(")
-                    .append(m.getValue())
-                    .append("-"+name)
-                    .append(m.getKey())
-            .append("))+");
+    public static String mapStringRequest(String name, Map<Integer, Float> map, int type) {
+        StringBuilder s = new StringBuilder();
+        switch (type) {
+
+            case 1:
+                for (Map.Entry m : map.entrySet()) {
+                    s.append("sqrt(abs(")
+                            .append(m.getValue())
+                            .append("-" + name)
+                            .append(m.getKey())
+                            .append("))+");
+                }
+                break;
+            case 2:
+                for (Map.Entry m : map.entrySet()) {
+                    s.append("sqrt(abs(")
+                            .append("sqrt(" + m.getValue() + ")")
+                            .append("-")
+                            .append("sqrt(" + name + m.getKey() + ")")
+                            .append("))+");
+                }
+                break;
+            case 3:
+                for (Map.Entry m : map.entrySet()) {
+                    s.append("sqrt(abs(")
+                            .append("pow(" + m.getValue() + "," + 1.f / 4.f + ")")
+                            .append("-")
+                            .append("pow(" + name + m.getKey() + "," + 1.f / 4.f + ")")
+                            .append("))+");
+                }
+                break;
+            case 4:
+                for (Map.Entry m : map.entrySet()) {
+                    s.append("sqrt(abs(")
+                            .append("pow(" + m.getValue() + "," + 1.f / 8.f + ")")
+                            .append("-")
+                            .append("pow(" + name + m.getKey() + "," + 1.f / 8.f + ")")
+                            .append("))+");
+                }
+                break;
+            case 5:
+                for (Map.Entry m : map.entrySet()) {
+                    s.append("sqrt(abs(")
+                            .append("pow(" + m.getValue() + "," + 1.f / 16.f + ")")
+                            .append("-")
+                            .append("pow(" + name + m.getKey() + "," + 1.f / 16.f + ")")
+                            .append("))+");
+                }
+                break;
         }
         return s.toString();
     }

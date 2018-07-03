@@ -29,11 +29,11 @@ public class PixelReader {
 
 
     public PixelReader(BufferedImage image) {
+        pixelCount=image.getHeight()*image.getWidth();
         this.image = image;
         initResultMap();
         for (int i = 0; i < image.getWidth(); i++) {
             for (int j = 0; j < image.getHeight(); j++) {
-                pixelCount++;
                 Color c = new Color(image.getRGB(i, j));
                 HSV hsv = HSV.getHSV(c.getRed(), c.getGreen(), c.getBlue());
                 float h = hsv.getH();
@@ -45,7 +45,7 @@ public class PixelReader {
                     grey++;
                 } else if (s <= 0.13 && v >= 0.87) {
                     white++;
-                } else if ((s > 0.13 && s <= 20) && (v >= 0.70 && v < 0.87)) {
+                } else if ((s > 0.13 && s <= 0.20) && (v >= 0.70 && v < 0.87)) {
                     ligth_grey++;
                 } else {
                     if (h <= 0.047) {
@@ -88,7 +88,7 @@ public class PixelReader {
         grey=grey/pixelCount;
         white=white/pixelCount;
         ligth_grey=ligth_grey/pixelCount;
-
+        System.out.println("");
     }
 
 
@@ -140,31 +140,31 @@ public class PixelReader {
         float s = hsv.getS();
         float v = hsv.getV();
 
-            float limitx1 = 0.f;
-            float limitx2 = 0.25f;
-            float limity1 = 0.f;
-            float limity2 = 0.25f;
+        float limitx1 = 0.f;
+        float limitx2 = 0.25f;
+        float limity1 = 0.f;
+        float limity2 = 0.26f;
 
-            int index = 0;
-            for (int x = 0; x < 4; x++) {
-                if (v >= limitx1 && v < limitx2)
-                    for (int y = 0; y < 4; y++) {
-                        if (s >= limity1 && s < limity2) {
-                            float numb = map.get(index);
-                            numb++;
-                            map.put(index, numb);
-                        } else {
-                            index++;
-                        }
-                        limity1 += 0.25f;
-                        limity2 += 0.25f;
+        int index = 0;
+        for (int x = 0; x < 4; x++) {
+            if (v > limitx1 && v <= limitx2)
+                for (int y = 0; y < 4; y++) {
+                    if (s >= limity1 && s <= limity2) {
+                        float numb = map.get(index);
+                        numb++;
+                        map.put(index, numb);
+                    } else {
+                        index++;
                     }
-                else {
-                    index += 4;
+                    limity1 += 0.25f;
+                    limity2 += 0.25f;
                 }
-                limitx1 += 0.25f;
-                limitx2 += 0.25f;
+            else {
+                index += 4;
             }
+            limitx1 += 0.25f;
+            limitx2 += 0.25f;
+        }
 
     }
 
