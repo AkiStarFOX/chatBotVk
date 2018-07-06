@@ -1,3 +1,5 @@
+package Other;
+
 public class ColorLimits {
     float h;
     float s;

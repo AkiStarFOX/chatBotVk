@@ -214,7 +214,7 @@ public class MMCQ {
     }
 
     /**
-     * Histo (1-d array, giving the number of pixels in each quantized region of color space), or
+     * Other.Histo (1-d array, giving the number of pixels in each quantized region of color space), or
      * null on error.
      */
     private static int[] getHisto(int[][] pixels) {

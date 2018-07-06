@@ -1,13 +1,16 @@
-import ImgBot.ColorThief;
+import ColorModel.HSV;
 import Kmeans.Cluster;
 import Kmeans.KMeans;
+import Other.Histo;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.vk.api.sdk.callback.longpoll.responses.GetLongPollEventsResponse;
 import com.vk.api.sdk.client.VkApiClient;
 import com.vk.api.sdk.client.actors.GroupActor;
 import com.vk.api.sdk.httpclient.HttpTransportClient;
-import org.apache.commons.math3.ml.clustering.KMeansPlusPlusClusterer;
+import com.vk.api.sdk.objects.photos.Photo;
+import com.vk.api.sdk.objects.photos.PhotoUpload;
+import com.vk.api.sdk.objects.photos.responses.WallUploadResponse;
 
 
 import javax.imageio.ImageIO;
@@ -34,19 +37,16 @@ public class Main {
 
 
     public static void main(String[] args) throws Exception {
+
         Properties properties = readProperties();
         HttpTransportClient client = new HttpTransportClient();
         VkApiClient apiClient = new VkApiClient(client);
         GroupActor actor = initVkApi(apiClient, readProperties());
 
-
         com.vk.api.sdk.objects.groups.responses.GetLongPollServerResponse getResponse = apiClient.groups().getLongPollServer(actor).execute();
 
 
-        KMeans kMeans = new KMeans("C:\\Users\\WoW-a\\IdeaProjects\\chatBotVk\\chatBot\\src\\main\\java\\Kmeans\\test.csv",3);
-        for (Cluster c:kMeans.getPointsClusters()){
-            System.out.println("TEST"+c);
-        }
+
         int ts = getResponse.getTs();
 
         while (true) {
@@ -72,18 +72,18 @@ public class Main {
                         JsonObject test = (JsonObject) phonesItr.next();
                         JsonObject jsPhoto = test.getAsJsonObject("photo");
 
-                        for (int i = 1; i < 6; i++) {
-                            ArrayList<Integer> listFromDB = getPhotoFromDBforImg(jsPhoto.get("photo_604").getAsString(), i);
+//                        for (int i = 1; i < 6; i++) {
+                            ArrayList<Integer> listFromDB = getPhotoFromDBforImg(jsPhoto.get("photo_604").getAsString(), 1);
                             List<String> attachIdList = loadPhotoInListForSend(listFromDB, actor, apiClient);
 
                             apiClient.messages()
                                     .send(actor)
-                                    .message("Формула - " + i + "; Время запроса - " + ((float) (System.currentTimeMillis() - time) / 1000.f) + " sec")
+                                    .message("Формула - " + 1 + "; Время запроса - " + ((float) (System.currentTimeMillis() - time) / 1000.f) + " sec")
                                     .userId(jsonObject.get("user_id").getAsInt())
                                     .randomId(random.nextInt())
                                     .attachment(attachIdList)
                                     .execute();
-                        }
+//                        }
                     } else {
                         System.out.println("NOT HERE");
                     }
@@ -249,11 +249,11 @@ public class Main {
 
     }
 
-    private static ArrayList<Integer> getPhotoFromDBforImg(String URL, int type) {
+    private static ArrayList<Integer> getPhotoFromDBforImg(String URL, int type) throws IOException {
 
         Connection connection = null;
         Set<Integer> list = new LinkedHashSet();
-        float limit = 1.6f;
+        float limit = 0.1f;
 
         File file = null;
         BufferedImage img = null;
@@ -273,19 +273,76 @@ public class Main {
 
 
         PixelReader pixelReader = new PixelReader(img);
+        HashMap<Integer,HSV> mapOfColors = new HashMap<>();
 
+        KMeans kMeans = new KMeans(img,5);
+        List<Cluster> l = kMeans.getPointsClusters();
+
+
+        for (int c=0;c<l.size();c++){
+
+            if(l.get(c).getPoints().size()!=0){
+                mapOfColors.put(c,new HSV((float)l.get(c).getCentroid().x,(float)l.get(c).getCentroid().y,(float)l.get(c).getCentroid().z,l.get(c).getPoints().size()/kMeans.getCountOfPixel()));
+            }
+
+            System.out.println("summ = "+c +" count = " +l.get(c).getPoints().size()/kMeans.getCountOfPixel());
+        }
+//        System.out.println(clusterStringRequest(mapOfColors,limit));
+
+
+
+        BufferedImage img2 = new BufferedImage(600, mapOfColors.size()*100, BufferedImage.TYPE_3BYTE_BGR);
+        Graphics2D g2d = img2.createGraphics();
+
+        try {
+            g2d.setBackground(Color.WHITE);
+            g2d.fillRect(0, 0, 600, 800);
+
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HBGR);
+            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+
+            int y=0;
+            for(Map.Entry e:mapOfColors.entrySet()) {
+                HSV hsv = (HSV) e.getValue();
+                Color color = new Color(Color.HSBtoRGB(hsv.getH(), hsv.getS(), hsv.getV()));
+                g2d.setColor(color);
+                g2d.fillRect(0, y, (int)(hsv.getCountOfClaster()*60)*10, 100);
+                g2d.setColor(Color.BLACK);
+                g2d.drawRect(0,y,(int)(hsv.getCountOfClaster()*60)*10,100);
+                y += 100;
+            }
+        } finally {
+            g2d.dispose();
+        }
+
+        ImageIO.write(img2, "PNG", new File("test.png"));
+
+//        PhotoUpload serverResponse = .photos().getWallUploadServer(actor).execute();
+//        WallUploadResponse uploadResponse = vk.upload().photoWall(serverResponse.getUploadUrl(), file).execute();
+//        List<Photo> photoList = vk.photos().saveWallPhoto(actor, uploadResponse.getPhoto())
+//                .server(uploadResponse.getServer())
+//                .hash(uploadResponse.getHash())
+//                .execute();
+//
+//        Photo photo = photoList.get(0);
+//        String attachId = "photo" + photo.getOwnerId() + "_" + photo.getId();
+//        GetResponse getResponse = vk.wall().post(actor)
+//                .attachments(attachId)
+//                .execute();
 
         try {
             connection = DriverManager.getConnection(MYSQL_URL, MYSQL_LOGIN, MYSQL_PASSWORD);
             Statement statement = connection.createStatement();
             while (list.size() < 10) {
+//                System.out.println(clusterStringRequest(mapOfColors,limit));
 //                System.out.println(sqlRequest(histo,limit));
 //                ResultSet resultSet = statement.executeQuery(sqlRequest(histo,limit)) ;
                 long time = System.currentTimeMillis();
-                System.out.println(sqlPixelRequest(pixelReader, limit, type));
-                ResultSet resultSet = statement.executeQuery(sqlPixelRequest(pixelReader, limit, type));
-                System.out.println("time zaporsa = " + (float) (System.currentTimeMillis() - time) / 1000);
-//
+//                System.out.println(sqlPixelRequest(pixelReader, limit, type));
+//                ResultSet resultSet = statement.executeQuery(sqlPixelRequest(pixelReader, limit, type));
+//                System.out.println("time zaporsa = " + (float) (System.currentTimeMillis() - time) / 1000);
+              ResultSet resultSet = statement.executeQuery(clusterStringRequest(mapOfColors,limit));
 
 
                 while (resultSet.next()) {
@@ -294,7 +351,7 @@ public class Main {
                     System.out.println(resultSet.getString(3));
 
                 }
-                limit += 0.5;
+                limit += 0.1;
 
 
             }
@@ -456,6 +513,30 @@ public class Main {
                 }
                 break;
         }
+        return s.toString();
+    }
+    public static String clusterStringRequest(HashMap<Integer,HSV> map,float limit){
+        StringBuilder s = new StringBuilder("select * from ClusterTable where (");
+        for (Map.Entry m : map.entrySet()) {
+            HSV hsv = (HSV)m.getValue();
+            for(int i=0;i<8;i++){
+            s.append("("+clusterAdd(hsv,i)+") +");
+            }
+        }
+        s.append("0)<"+limit);
+        return s.toString();
+    }
+    public static String clusterAdd(HSV hsv,int index){
+        StringBuilder s = new StringBuilder();
+        s.append("sqrt(abs("+hsv.getH()/360.f);
+        s.append("-H"+index);
+        s.append("))+");
+        s.append("sqrt(abs("+hsv.getS()/100.f);
+        s.append("-S"+index);
+        s.append("))+");
+        s.append("sqrt(abs("+hsv.getV()/100.f);
+        s.append("-V"+index);
+        s.append("))");
         return s.toString();
     }
 }

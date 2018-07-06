@@ -1,7 +1,13 @@
 package Kmeans;
 
-import java.io.*;
-import java.util.*;
+import ColorModel.HSV;
+
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
 
 public class KMeans {
 
@@ -9,27 +15,40 @@ public class KMeans {
     public final List<Point> allPoints;
     public final int k;
     private Clusters pointClusters; //the k Clusters
+    private float countOfPixel;
 
-    /**@param pointsFile : the csv file for input points
+    /**@param image : image
      * @param k : number of clusters
      */
-    public KMeans(String pointsFile, int k) {
+    public KMeans(BufferedImage image, int k) {
         if (k < 2)
             new Exception("The value of k should be 2 or more.").printStackTrace();
         this.k = k;
         List<Point> points = new ArrayList<Point>();
-        try {
-            InputStreamReader read = new InputStreamReader(
-                    new FileInputStream(pointsFile), "UTF-8");
-            BufferedReader reader = new BufferedReader(read);
-            String line;
-            while ((line = reader.readLine()) != null)
-                points.add(getPointByLine(line));
-            reader.close();
-
-        } catch (IOException e) {
-            e.printStackTrace();
+//        try {
+//            InputStreamReader read = new InputStreamReader(
+//                    new FileInputStream(pointsFile), "UTF-8");
+//            BufferedReader reader = new BufferedReader(read);
+//            String line;
+//            while ((line = reader.readLine()) != null)
+//                points.add(getPointByLine(line));
+//            reader.close();
+//
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+        countOfPixel=image.getHeight()*image.getWidth();
+        for (int i = 0; i < image.getWidth(); i++) {
+            for (int j = 0; j < image.getHeight(); j++) {
+                Color c = new Color(image.getRGB(i, j));
+                HSV hsv = HSV.getHSV(c.getRed(), c.getGreen(), c.getBlue());
+                float h = hsv.getH();
+                float s = hsv.getS();
+                float v = hsv.getV();
+                points.add(new Point(h,s,v));
+            }
         }
+
         this.allPoints = Collections.unmodifiableList(points);
     }
 
@@ -99,4 +118,8 @@ public class KMeans {
 //        for (int i = 0 ; i < kMeans.k; i++)
 //            System.out.println("Cluster " + i + ": " + pointsClusters.get(i));
 //    }
+
+    public float getCountOfPixel() {
+        return countOfPixel;
+    }
 }

@@ -1,3 +1,5 @@
+package ColorModel;
+
 import java.awt.*;
 
 public class HSV {
@@ -7,11 +9,13 @@ public class HSV {
     int r;
     int g;
     int b;
+    float countOfClaster;
 
-    public HSV(float h, float s, float v) {
+    public HSV(float h, float s, float v,float countOfClaster) {
         this.h = h;
         this.s = s;
         this.v = v;
+        this.countOfClaster = countOfClaster;
     }
 
     public HSV(int r, int g, int b) {
@@ -20,9 +24,9 @@ public class HSV {
         this.b = b;
         float[] hsv = new float[3];
         Color.RGBtoHSB(r,g,b,hsv);
-        this.h=hsv[0];
-        this.s=hsv[1];
-        this.v=hsv[2];
+        this.h=hsv[0]*360;
+        this.s=hsv[1]*100;
+        this.v=hsv[2]*100;
     }
 
     public float getH() {
@@ -50,5 +54,9 @@ public class HSV {
     }
     public static HSV getHSV(int red,int green,int blue){
         return new HSV(red,green,blue);
+    }
+
+    public float getCountOfClaster() {
+        return countOfClaster;
     }
 }

@@ -1,3 +1,7 @@
+package ColorModel;
+
+import Other.Histo;
+
 import java.awt.*;
 
 public class HSL {
@@ -31,7 +35,7 @@ public class HSL {
         this.l = l;
     }
 
-//    public HSL(int r, int g, int b) {
+//    public ColorModel.HSL(int r, int g, int b) {
 //        this.r = r;
 //        this.g = g;
 //        this.b = b;
@@ -99,7 +103,7 @@ public class HSL {
         float g = rgb[1];
         float b = rgb[2];
 
-        //	Minimum and Maximum RGB values are used in the HSL calculations
+        //	Minimum and Maximum RGB values are used in the ColorModel.HSL calculations
 
         float min = Math.min(r, Math.min(g, b));
         float max = Math.max(r, Math.max(g, b));

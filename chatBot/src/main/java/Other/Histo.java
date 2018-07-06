@@ -1,3 +1,7 @@
+package Other;
+
+import ColorModel.HSV;
+
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.Map;
@@ -19,7 +23,7 @@ public class Histo {
             for (int j=0;j<image.getHeight();j++){
                 Color c = new Color(image.getRGB(i,j));
                 HSV hsv = HSV.getHSV(c.getRed(),c.getGreen(),c.getBlue());
-//                HSL hsv=HSL.getHSL(c.getRed(),c.getGreen(),c.getBlue());
+//                ColorModel.HSL hsv=ColorModel.HSL.getHSL(c.getRed(),c.getGreen(),c.getBlue());
                 float start=0;
                 float end =0.1f;
                 for(int k=0;k<10;k++){
