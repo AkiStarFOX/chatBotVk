@@ -1,15 +1,20 @@
 import ColorModel.HSV;
 import Kmeans.Cluster;
 import Kmeans.KMeans;
+import Other.HSVcomp;
 import Other.Histo;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.vk.api.sdk.callback.longpoll.responses.GetLongPollEventsResponse;
 import com.vk.api.sdk.client.VkApiClient;
 import com.vk.api.sdk.client.actors.GroupActor;
+import com.vk.api.sdk.exceptions.ApiException;
+import com.vk.api.sdk.exceptions.ClientException;
 import com.vk.api.sdk.httpclient.HttpTransportClient;
 import com.vk.api.sdk.objects.photos.Photo;
 import com.vk.api.sdk.objects.photos.PhotoUpload;
+import com.vk.api.sdk.objects.photos.responses.GetResponse;
+import com.vk.api.sdk.objects.photos.responses.MessageUploadResponse;
 import com.vk.api.sdk.objects.photos.responses.WallUploadResponse;
 
 
@@ -34,6 +39,7 @@ public class Main {
     private static final String MYSQL_URL = "jdbc:mysql://localhost:3306/imgdb?useUnicode=true&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=UTC";
     private static final String MYSQL_LOGIN = "root";
     private static final String MYSQL_PASSWORD = "root";
+    static String colorsOfimg;
 
 
     public static void main(String[] args) throws Exception {
@@ -42,6 +48,7 @@ public class Main {
         HttpTransportClient client = new HttpTransportClient();
         VkApiClient apiClient = new VkApiClient(client);
         GroupActor actor = initVkApi(apiClient, readProperties());
+
 
         com.vk.api.sdk.objects.groups.responses.GetLongPollServerResponse getResponse = apiClient.groups().getLongPollServer(actor).execute();
 
@@ -73,8 +80,13 @@ public class Main {
                         JsonObject jsPhoto = test.getAsJsonObject("photo");
 
 //                        for (int i = 1; i < 6; i++) {
-                            ArrayList<Integer> listFromDB = getPhotoFromDBforImg(jsPhoto.get("photo_604").getAsString(), 1);
-                            List<String> attachIdList = loadPhotoInListForSend(listFromDB, actor, apiClient);
+                            ArrayList<Integer> listFromDB = getPhotoFromDBforImg(jsPhoto.get("photo_604").getAsString(), apiClient,actor);
+                            List<String > prewAttachIdList = loadPhotoInListForSend(listFromDB, actor, apiClient);
+                        List<String> attachIdList = new ArrayList<>();
+                        attachIdList.add(colorsOfimg);
+                        attachIdList.addAll(prewAttachIdList);
+
+
 
                             apiClient.messages()
                                     .send(actor)
@@ -124,7 +136,7 @@ public class Main {
 
     private static List<String> loadPhotoInListForSend(ArrayList<Integer> listFromDB, GroupActor actor, VkApiClient apiClient) {
         List<String> list = new ArrayList<>();
-        for (int i = 0; i < listFromDB.size(); i++) {
+        for (int i = 0; i < 10; i++) {
             File file = null;
             list.add("photo" + -104375368 + "_" + listFromDB.get(i));
 
@@ -249,11 +261,11 @@ public class Main {
 
     }
 
-    private static ArrayList<Integer> getPhotoFromDBforImg(String URL, int type) throws IOException {
+    private static ArrayList<Integer> getPhotoFromDBforImg(String URL,VkApiClient vk,GroupActor actor) throws IOException, ClientException, ApiException {
 
         Connection connection = null;
         Set<Integer> list = new LinkedHashSet();
-        float limit = 0.1f;
+        float limit = 10.f;
 
         File file = null;
         BufferedImage img = null;
@@ -298,14 +310,14 @@ public class Main {
             g2d.setBackground(Color.WHITE);
             g2d.fillRect(0, 0, 600, 800);
 
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HBGR);
-            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+//            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+//            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HBGR);
+//            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
 
             int y=0;
             for(Map.Entry e:mapOfColors.entrySet()) {
                 HSV hsv = (HSV) e.getValue();
-                Color color = new Color(Color.HSBtoRGB(hsv.getH(), hsv.getS(), hsv.getV()));
+                Color color = new Color(Color.HSBtoRGB(hsv.getH()/360, hsv.getS()/100, hsv.getV()/100));
                 g2d.setColor(color);
                 g2d.fillRect(0, y, (int)(hsv.getCountOfClaster()*60)*10, 100);
                 g2d.setColor(Color.BLACK);
@@ -315,34 +327,33 @@ public class Main {
         } finally {
             g2d.dispose();
         }
+        File file2 = new File("test.png");
+        ImageIO.write(img2, "PNG", file2);
 
-        ImageIO.write(img2, "PNG", new File("test.png"));
+        PhotoUpload photoUpload = vk.photos().getMessagesUploadServer(actor).execute();
+        MessageUploadResponse messageUploadResponse = vk.upload().photoMessage(photoUpload.getUploadUrl(), file2).execute();
 
-//        PhotoUpload serverResponse = .photos().getWallUploadServer(actor).execute();
-//        WallUploadResponse uploadResponse = vk.upload().photoWall(serverResponse.getUploadUrl(), file).execute();
-//        List<Photo> photoList = vk.photos().saveWallPhoto(actor, uploadResponse.getPhoto())
-//                .server(uploadResponse.getServer())
-//                .hash(uploadResponse.getHash())
-//                .execute();
-//
-//        Photo photo = photoList.get(0);
-//        String attachId = "photo" + photo.getOwnerId() + "_" + photo.getId();
-//        GetResponse getResponse = vk.wall().post(actor)
-//                .attachments(attachId)
-//                .execute();
+        List<Photo> photoList = vk.photos().saveMessagesPhoto(actor, messageUploadResponse.getPhoto())
+                .server(messageUploadResponse.getServer())
+                .hash(messageUploadResponse.getHash())
+                .execute();
+        Photo photo = photoList.get(0);
+        colorsOfimg = "photo" + photo.getOwnerId() + "_" + photo.getId();
 
         try {
             connection = DriverManager.getConnection(MYSQL_URL, MYSQL_LOGIN, MYSQL_PASSWORD);
             Statement statement = connection.createStatement();
             while (list.size() < 10) {
-//                System.out.println(clusterStringRequest(mapOfColors,limit));
+                System.out.println(clusterStringRequestV2(mapOfColors,limit));
+
 //                System.out.println(sqlRequest(histo,limit));
 //                ResultSet resultSet = statement.executeQuery(sqlRequest(histo,limit)) ;
                 long time = System.currentTimeMillis();
 //                System.out.println(sqlPixelRequest(pixelReader, limit, type));
 //                ResultSet resultSet = statement.executeQuery(sqlPixelRequest(pixelReader, limit, type));
 //                System.out.println("time zaporsa = " + (float) (System.currentTimeMillis() - time) / 1000);
-              ResultSet resultSet = statement.executeQuery(clusterStringRequest(mapOfColors,limit));
+//              ResultSet resultSet = statement.executeQuery(clusterStringRequest(mapOfColors,limit));
+              ResultSet resultSet = statement.executeQuery(clusterStringRequestV2(mapOfColors,limit));
 
 
                 while (resultSet.next()) {
@@ -351,7 +362,7 @@ public class Main {
                     System.out.println(resultSet.getString(3));
 
                 }
-                limit += 0.1;
+                limit += 2;
 
 
             }
@@ -363,158 +374,158 @@ public class Main {
 
         return list1;
     }
+//
+//    public static String sqlRequest(Histo histoOfImg, float limit) {
+//        StringBuilder s = new StringBuilder("select * from imageshsv where (");
+//        for (Map.Entry e : histoOfImg.getH().entrySet()) {
+//            s.append("pow((")
+//                    .append((float) e.getValue())
+//                    .append("-H")
+//                    .append(e.getKey())
+//                    .append("),2)+");
+//        }
+//        s.append("0)<" + limit + " and (");
+//        for (Map.Entry e : histoOfImg.getS().entrySet()) {
+//            s.append("pow((")
+//                    .append((float) e.getValue())
+//                    .append("-S")
+//                    .append(e.getKey())
+//                    .append("),2)+");
+//        }
+//        s.append("0)<" + limit + " and (");
+//        for (Map.Entry e : histoOfImg.getV().entrySet()) {
+//            s.append("pow((")
+//                    .append((float) e.getValue())
+//                    .append("-V")
+//                    .append(e.getKey())
+//                    .append("),2)+");
+//        }
+//        s.append("0)<" + limit);
+//
+//
+//        return s.toString();
+//    }
 
-    public static String sqlRequest(Histo histoOfImg, float limit) {
-        StringBuilder s = new StringBuilder("select * from imageshsv where (");
-        for (Map.Entry e : histoOfImg.getH().entrySet()) {
-            s.append("pow((")
-                    .append((float) e.getValue())
-                    .append("-H")
-                    .append(e.getKey())
-                    .append("),2)+");
-        }
-        s.append("0)<" + limit + " and (");
-        for (Map.Entry e : histoOfImg.getS().entrySet()) {
-            s.append("pow((")
-                    .append((float) e.getValue())
-                    .append("-S")
-                    .append(e.getKey())
-                    .append("),2)+");
-        }
-        s.append("0)<" + limit + " and (");
-        for (Map.Entry e : histoOfImg.getV().entrySet()) {
-            s.append("pow((")
-                    .append((float) e.getValue())
-                    .append("-V")
-                    .append(e.getKey())
-                    .append("),2)+");
-        }
-        s.append("0)<" + limit);
-
-
-        return s.toString();
-    }
-
-    public static String sqlPixelRequest(PixelReader pixelReader, float limit, int type) {
-        Map<Integer, Map<Integer, Float>> resultMap = pixelReader.getResultMap();
-
-
-        StringBuilder s = new StringBuilder("select * from imageshsv where (");
-
-        s.append(mapStringRequest("R", resultMap.get(0), type));
-        s.append(mapStringRequest("O", resultMap.get(1), type));
-        s.append(mapStringRequest("Y", resultMap.get(2), type));
-        s.append(mapStringRequest("LY", resultMap.get(3), type));
-        s.append(mapStringRequest("LG", resultMap.get(4), type));
-        s.append(mapStringRequest("G", resultMap.get(5), type));
-        s.append(mapStringRequest("LB", resultMap.get(6), type));
-        s.append(mapStringRequest("B", resultMap.get(7), type));
-        s.append(mapStringRequest("DB", resultMap.get(8), type));
-        s.append(mapStringRequest("P", resultMap.get(9), type));
-        s.append(mapStringRequest("DP", resultMap.get(10), type));
-        s.append(mapStringRequest("Pink", resultMap.get(11), type));
-        s.append(0 + ")<" + limit + " and ");
-        s.append("(Black >").append(pixelReader.getBlack()-0.1).append(" and Black < ").append(pixelReader.getBlack()+0.1).append(") and");
-        s.append("(White >").append(pixelReader.getWhite()-0.1).append(" and White < ").append(pixelReader.getWhite()+0.1).append(") and");
-        s.append("(Grey >").append(pixelReader.getGrey()-0.1).append(" and Grey < ").append(pixelReader.getGrey()+0.1).append(") and");
-        s.append("(LG >").append(pixelReader.getLigth_grey()-0.1).append(" and LG < ").append(pixelReader.getLigth_grey()+0.1).append(")");
-
-
-//        switch (type){
+//    public static String sqlPixelRequest(PixelReader pixelReader, float limit, int type) {
+//        Map<Integer, Map<Integer, Float>> resultMap = pixelReader.getResultMap();
+//
+//
+//        StringBuilder s = new StringBuilder("select * from imageshsv where (");
+//
+//        s.append(mapStringRequest("R", resultMap.get(0), type));
+//        s.append(mapStringRequest("O", resultMap.get(1), type));
+//        s.append(mapStringRequest("Y", resultMap.get(2), type));
+//        s.append(mapStringRequest("LY", resultMap.get(3), type));
+//        s.append(mapStringRequest("LG", resultMap.get(4), type));
+//        s.append(mapStringRequest("G", resultMap.get(5), type));
+//        s.append(mapStringRequest("LB", resultMap.get(6), type));
+//        s.append(mapStringRequest("B", resultMap.get(7), type));
+//        s.append(mapStringRequest("DB", resultMap.get(8), type));
+//        s.append(mapStringRequest("P", resultMap.get(9), type));
+//        s.append(mapStringRequest("DP", resultMap.get(10), type));
+//        s.append(mapStringRequest("Pink", resultMap.get(11), type));
+//        s.append(0 + ")<" + limit + " and ");
+//        s.append("(Black >").append(pixelReader.getBlack()-0.1).append(" and Black < ").append(pixelReader.getBlack()+0.1).append(") and");
+//        s.append("(White >").append(pixelReader.getWhite()-0.1).append(" and White < ").append(pixelReader.getWhite()+0.1).append(") and");
+//        s.append("(Grey >").append(pixelReader.getGrey()-0.1).append(" and Grey < ").append(pixelReader.getGrey()+0.1).append(") and");
+//        s.append("(LG >").append(pixelReader.getLigth_grey()-0.1).append(" and LG < ").append(pixelReader.getLigth_grey()+0.1).append(")");
+//
+//
+////        switch (type){
+////            case 1:
+////                s.append("sqrt(abs(").append(pixelReader.getBlack()).append("-Black))+");
+////                s.append("sqrt(abs(").append(pixelReader.getGrey()).append("-Grey))+");
+////                s.append("sqrt(abs(").append(pixelReader.getWhite()).append("-White))+");
+////                s.append("sqrt(abs(").append(pixelReader.getLigth_grey()).append("-LG))");
+////                break;
+////            case 2:
+////                s.append("sqrt(abs(sqrt(").append(pixelReader.getBlack()).append(")- sqrt(Black)))+");
+////                s.append("sqrt(abs(sqrt(").append(pixelReader.getGrey()).append(") - sqrt(Grey)))+");
+////                s.append("sqrt(abs(sqrt(").append(pixelReader.getWhite()).append(") - sqrt(White)))+");
+////                s.append("sqrt(abs(sqrt(").append(pixelReader.getLigth_grey()).append(") - sqrt(LG)))");
+////                break;
+////            case 3:
+////                s.append("sqrt(abs(pow(").append(pixelReader.getBlack()).append(","+1.f/4.f+")- pow(Black,"+1.f/4.f+")))+");
+////                s.append("sqrt(abs(pow(").append(pixelReader.getGrey()).append(","+1.f/4.f+")- pow(Grey,"+1.f/4.f+")))+");
+////                s.append("sqrt(abs(pow(").append(pixelReader.getWhite()).append(","+1.f/4.f+")- pow(White,"+1.f/4.f+")))+");
+////                s.append("sqrt(abs(pow(").append(pixelReader.getLigth_grey()).append(","+1.f/4.f+")- pow(LG,"+1.f/4.f+")))");
+////                break;
+////            case 4:
+////                s.append("sqrt(abs(pow(").append(pixelReader.getBlack()).append(","+1.f/8.f+")- pow(Black,"+1.f/4.f+")))+");
+////                s.append("sqrt(abs(pow(").append(pixelReader.getGrey()).append(","+1.f/8.f+")- pow(Grey,"+1.f/8.f+")))+");
+////                s.append("sqrt(abs(pow(").append(pixelReader.getWhite()).append(","+1.f/8.f+")- pow(White,"+1.f/8.f+")))+");
+////                s.append("sqrt(abs(pow(").append(pixelReader.getLigth_grey()).append(","+1.f/8.f+")- pow(LG,"+1.f/8.f+")))");
+////                break;
+////            case 5:
+////                s.append("sqrt(abs(pow(").append(pixelReader.getBlack()).append(","+1.f/16.f+")- pow(Black,"+1.f/16.f+")))+");
+////                s.append("sqrt(abs(pow(").append(pixelReader.getGrey()).append(","+1.f/16.f+")- pow(Grey,"+1.f/16.f+")))+");
+////                s.append("sqrt(abs(pow(").append(pixelReader.getWhite()).append(","+1.f/16.f+")- pow(White,"+1.f/16.f+")))+");
+////                s.append("sqrt(abs(pow(").append(pixelReader.getLigth_grey()).append(","+1.f/16.f+")- pow(LG,"+1.f/16.f+")))");
+////                break;
+////
+////        }
+////        s.append("sqrt(abs(").append(pixelReader.getBlack()).append("-Black))+");
+////        s.append("sqrt(abs(").append(pixelReader.getGrey()).append("-Grey))+");
+////        s.append("sqrt(abs(").append(pixelReader.getWhite()).append("-White))+");
+////        s.append("sqrt(abs(").append(pixelReader.getLigth_grey()).append("-LG))");
+//
+////        s.append(")<" + limit);
+//        System.out.println(limit);
+//        return s.toString();
+//    }
+//
+//    public static String mapStringRequest(String name, Map<Integer, Float> map, int type) {
+//        StringBuilder s = new StringBuilder();
+//        switch (type) {
+//
 //            case 1:
-//                s.append("sqrt(abs(").append(pixelReader.getBlack()).append("-Black))+");
-//                s.append("sqrt(abs(").append(pixelReader.getGrey()).append("-Grey))+");
-//                s.append("sqrt(abs(").append(pixelReader.getWhite()).append("-White))+");
-//                s.append("sqrt(abs(").append(pixelReader.getLigth_grey()).append("-LG))");
+//                for (Map.Entry m : map.entrySet()) {
+//                    s.append("sqrt(abs(")
+//                            .append(m.getValue())
+//                            .append("-" + name)
+//                            .append(m.getKey())
+//                            .append("))+");
+//                }
 //                break;
 //            case 2:
-//                s.append("sqrt(abs(sqrt(").append(pixelReader.getBlack()).append(")- sqrt(Black)))+");
-//                s.append("sqrt(abs(sqrt(").append(pixelReader.getGrey()).append(") - sqrt(Grey)))+");
-//                s.append("sqrt(abs(sqrt(").append(pixelReader.getWhite()).append(") - sqrt(White)))+");
-//                s.append("sqrt(abs(sqrt(").append(pixelReader.getLigth_grey()).append(") - sqrt(LG)))");
+//                for (Map.Entry m : map.entrySet()) {
+//                    s.append("sqrt(abs(")
+//                            .append("sqrt(" + m.getValue() + ")")
+//                            .append("-")
+//                            .append("sqrt(" + name + m.getKey() + ")")
+//                            .append("))+");
+//                }
 //                break;
 //            case 3:
-//                s.append("sqrt(abs(pow(").append(pixelReader.getBlack()).append(","+1.f/4.f+")- pow(Black,"+1.f/4.f+")))+");
-//                s.append("sqrt(abs(pow(").append(pixelReader.getGrey()).append(","+1.f/4.f+")- pow(Grey,"+1.f/4.f+")))+");
-//                s.append("sqrt(abs(pow(").append(pixelReader.getWhite()).append(","+1.f/4.f+")- pow(White,"+1.f/4.f+")))+");
-//                s.append("sqrt(abs(pow(").append(pixelReader.getLigth_grey()).append(","+1.f/4.f+")- pow(LG,"+1.f/4.f+")))");
+//                for (Map.Entry m : map.entrySet()) {
+//                    s.append("sqrt(abs(")
+//                            .append("pow(" + m.getValue() + "," + 1.f / 4.f + ")")
+//                            .append("-")
+//                            .append("pow(" + name + m.getKey() + "," + 1.f / 4.f + ")")
+//                            .append("))+");
+//                }
 //                break;
 //            case 4:
-//                s.append("sqrt(abs(pow(").append(pixelReader.getBlack()).append(","+1.f/8.f+")- pow(Black,"+1.f/4.f+")))+");
-//                s.append("sqrt(abs(pow(").append(pixelReader.getGrey()).append(","+1.f/8.f+")- pow(Grey,"+1.f/8.f+")))+");
-//                s.append("sqrt(abs(pow(").append(pixelReader.getWhite()).append(","+1.f/8.f+")- pow(White,"+1.f/8.f+")))+");
-//                s.append("sqrt(abs(pow(").append(pixelReader.getLigth_grey()).append(","+1.f/8.f+")- pow(LG,"+1.f/8.f+")))");
+//                for (Map.Entry m : map.entrySet()) {
+//                    s.append("sqrt(abs(")
+//                            .append("pow(" + m.getValue() + "," + 1.f / 8.f + ")")
+//                            .append("-")
+//                            .append("pow(" + name + m.getKey() + "," + 1.f / 8.f + ")")
+//                            .append("))+");
+//                }
 //                break;
 //            case 5:
-//                s.append("sqrt(abs(pow(").append(pixelReader.getBlack()).append(","+1.f/16.f+")- pow(Black,"+1.f/16.f+")))+");
-//                s.append("sqrt(abs(pow(").append(pixelReader.getGrey()).append(","+1.f/16.f+")- pow(Grey,"+1.f/16.f+")))+");
-//                s.append("sqrt(abs(pow(").append(pixelReader.getWhite()).append(","+1.f/16.f+")- pow(White,"+1.f/16.f+")))+");
-//                s.append("sqrt(abs(pow(").append(pixelReader.getLigth_grey()).append(","+1.f/16.f+")- pow(LG,"+1.f/16.f+")))");
+//                for (Map.Entry m : map.entrySet()) {
+//                    s.append("sqrt(abs(")
+//                            .append("pow(" + m.getValue() + "," + 1.f / 16.f + ")")
+//                            .append("-")
+//                            .append("pow(" + name + m.getKey() + "," + 1.f / 16.f + ")")
+//                            .append("))+");
+//                }
 //                break;
-//
 //        }
-//        s.append("sqrt(abs(").append(pixelReader.getBlack()).append("-Black))+");
-//        s.append("sqrt(abs(").append(pixelReader.getGrey()).append("-Grey))+");
-//        s.append("sqrt(abs(").append(pixelReader.getWhite()).append("-White))+");
-//        s.append("sqrt(abs(").append(pixelReader.getLigth_grey()).append("-LG))");
-
-//        s.append(")<" + limit);
-        System.out.println(limit);
-        return s.toString();
-    }
-
-    public static String mapStringRequest(String name, Map<Integer, Float> map, int type) {
-        StringBuilder s = new StringBuilder();
-        switch (type) {
-
-            case 1:
-                for (Map.Entry m : map.entrySet()) {
-                    s.append("sqrt(abs(")
-                            .append(m.getValue())
-                            .append("-" + name)
-                            .append(m.getKey())
-                            .append("))+");
-                }
-                break;
-            case 2:
-                for (Map.Entry m : map.entrySet()) {
-                    s.append("sqrt(abs(")
-                            .append("sqrt(" + m.getValue() + ")")
-                            .append("-")
-                            .append("sqrt(" + name + m.getKey() + ")")
-                            .append("))+");
-                }
-                break;
-            case 3:
-                for (Map.Entry m : map.entrySet()) {
-                    s.append("sqrt(abs(")
-                            .append("pow(" + m.getValue() + "," + 1.f / 4.f + ")")
-                            .append("-")
-                            .append("pow(" + name + m.getKey() + "," + 1.f / 4.f + ")")
-                            .append("))+");
-                }
-                break;
-            case 4:
-                for (Map.Entry m : map.entrySet()) {
-                    s.append("sqrt(abs(")
-                            .append("pow(" + m.getValue() + "," + 1.f / 8.f + ")")
-                            .append("-")
-                            .append("pow(" + name + m.getKey() + "," + 1.f / 8.f + ")")
-                            .append("))+");
-                }
-                break;
-            case 5:
-                for (Map.Entry m : map.entrySet()) {
-                    s.append("sqrt(abs(")
-                            .append("pow(" + m.getValue() + "," + 1.f / 16.f + ")")
-                            .append("-")
-                            .append("pow(" + name + m.getKey() + "," + 1.f / 16.f + ")")
-                            .append("))+");
-                }
-                break;
-        }
-        return s.toString();
-    }
+//        return s.toString();
+//    }
     public static String clusterStringRequest(HashMap<Integer,HSV> map,float limit){
         StringBuilder s = new StringBuilder("select * from ClusterTable where (");
         for (Map.Entry m : map.entrySet()) {
@@ -539,4 +550,90 @@ public class Main {
         s.append("))");
         return s.toString();
     }
+    public static String clusterStringRequestV2(HashMap<Integer,HSV> map,float limit){
+        ArrayList<HSV> list = new ArrayList<>();
+        for (Map.Entry m:map.entrySet()){
+            list.add((HSV)m.getValue());
+        }
+        list.sort(new HSVcomp());
+        String stroke = "select * from ClusterTable  where " + clusterAddSubRequestWhere(list.get(list.size()-1),limit);
+        for (int i=list.size()-2;i>=0;i--){
+            stroke=selectRequest(stroke,list.get(i),i,limit);
+
+        }
+
+
+
+        return stroke;
+    }
+
+    public static String selectRequest(String selectRequest,HSV hsv,int index,float limit){
+        StringBuilder s = new StringBuilder();
+        s.append("select * from (" +selectRequest +") as s"+index + " where " + clusterAddSubRequestWhere(hsv,limit));
+        return s.toString();
+    }
+
+    public static String clusterAddSubRequestWhere(HSV hsv,float limit) {
+        StringBuilder stroke = new StringBuilder();
+
+        float h = hsv.getH() / 360.f;
+        float s = hsv.getS() / 100.f;
+        float v = hsv.getV() / 100.f;
+        for (int i = 0; i < 8; i++) {
+            stroke.append("(")
+            .append("H"+i)
+            .append(">="+limitMinus(h,procent(h,limit)))
+            .append(" and ")
+            .append("H"+i)
+            .append("<="+limitPlus(h,procent(h,limit)))
+            .append(" and ")
+
+            .append("S"+i)
+            .append(">="+limitMinus(s,procent(s,limit)))
+            .append(" and ")
+            .append("S"+i)
+            .append("<="+limitPlus(s,procent(s,limit)))
+            .append(" and ")
+
+            .append("V"+i)
+            .append(">="+limitMinus(v,procent(v,limit)))
+            .append(" and ")
+            .append("V"+i)
+            .append("<="+limitPlus(v,procent(v,limit)))
+            .append(" and ")
+
+            .append("W"+i)
+            .append(">="+limitMinus(hsv.getCountOfClaster(),procent(hsv.getCountOfClaster(),limit)))
+            .append(" and ")
+            .append("W"+i)
+            .append("<="+limitPlus(hsv.getCountOfClaster(),procent(hsv.getCountOfClaster(),limit)))
+            .append(") or ");
+
+        }
+        stroke.append("1>2");
+
+        return stroke.toString();
+    }
+
+    public static float procent(float a,float procent){
+        return a*procent/100.f;
+    }
+    public static float limitPlus(float a,float b){
+        float x=0;
+        x=a+b;
+        if(x>1.f){
+            x=1.f;
+        }
+        return x;
+    }
+
+    public static float limitMinus(float a,float b){
+        float x=0;
+        x=a-b;
+        if(x<0.f){
+            x=0.f;
+        }
+        return x;
+    }
+
 }
