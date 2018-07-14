@@ -40,6 +40,7 @@ public class Main {
     private static final String MYSQL_LOGIN = "root";
     private static final String MYSQL_PASSWORD = "root";
     static String colorsOfimg;
+    static List<String > listOfHisto;
 
 
     public static void main(String[] args) throws Exception {
@@ -86,6 +87,22 @@ public class Main {
                         attachIdList.add(colorsOfimg);
                         attachIdList.addAll(prewAttachIdList);
 
+                        List<String > prewHistoIdList = new ArrayList<>();
+
+                        for (int i =0;i<10;i++){
+                            prewHistoIdList.add(listOfHisto.get(i));
+                        }
+                        List<String> listForSent1 = new ArrayList<>();
+                        List<String> listForSent2 = new ArrayList<>();
+                        listForSent1.add(attachIdList.get(0));
+                        for (int i =1;i<5;i++){
+                            listForSent1.add(attachIdList.get(i));
+                            listForSent1.add(prewHistoIdList.get(i-1));
+                        }
+                        for (int i =4;i<9;i++){
+                            listForSent2.add(attachIdList.get(i));
+                            listForSent2.add(prewHistoIdList.get(i-1));
+                        }
 
 
                             apiClient.messages()
@@ -93,8 +110,15 @@ public class Main {
                                     .message("Формула - " + 1 + "; Время запроса - " + ((float) (System.currentTimeMillis() - time) / 1000.f) + " sec")
                                     .userId(jsonObject.get("user_id").getAsInt())
                                     .randomId(random.nextInt())
-                                    .attachment(attachIdList)
+                                    .attachment(listForSent1)
                                     .execute();
+                        apiClient.messages()
+                                .send(actor)
+                                .message("Формула - " + 1 + "; Время запроса - " + ((float) (System.currentTimeMillis() - time) / 1000.f) + " sec")
+                                .userId(jsonObject.get("user_id").getAsInt())
+                                .randomId(random.nextInt())
+                                .attachment(listForSent2)
+                                .execute();
 //                        }
                     } else {
                         System.out.println("NOT HERE");
@@ -265,6 +289,7 @@ public class Main {
 
         Connection connection = null;
         Set<Integer> list = new LinkedHashSet();
+        Set<String> listForHisto = new LinkedHashSet();
         float limit = 10.f;
 
         File file = null;
@@ -309,10 +334,6 @@ public class Main {
         try {
             g2d.setBackground(Color.WHITE);
             g2d.fillRect(0, 0, 600, 800);
-
-//            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-//            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HBGR);
-//            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
 
             int y=0;
             for(Map.Entry e:mapOfColors.entrySet()) {
@@ -360,7 +381,7 @@ public class Main {
 
                     list.add(resultSet.getInt(2));
                     System.out.println(resultSet.getString(3));
-
+                    listForHisto.add(resultSet.getString(4));
                 }
                 limit += 2;
 
@@ -371,6 +392,11 @@ public class Main {
             e.printStackTrace();
         }
         ArrayList<Integer> list1 = new ArrayList<>(list);
+        listOfHisto = new ArrayList<>();
+        for(String s:listForHisto) {
+            listOfHisto.add(s);
+        }
+
 
         return list1;
     }
